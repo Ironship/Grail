@@ -641,16 +641,18 @@ local floor, mod = math.floor, mod
 
 
 -- BEGIN Grail_SafeGetAuraDataByIndex wrapper
--- Calls GetAuraDataByIndex first; only checks the secrets API when data is actually
--- returned, avoiding a pcall on every out-of-range (nil) index.
+-- Checks the secrets API first and pcall-guards the call itself: the client now
+-- blocks GetAuraDataByIndex outright from tainted code ("Auras cannot be accessed
+-- when secret while tainted"), so the secret check must run before the call and
+-- the call must be protected against any remaining secret cases.
 local function Grail_SafeGetAuraDataByIndex(unit, index, filter)
     if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
-    local info = C_UnitAuras.GetAuraDataByIndex(unit, index, filter)
-    if info == nil then return nil end
     if C_Secrets and C_Secrets.ShouldUnitAuraIndexBeSecret then
         local ok, secret = pcall(C_Secrets.ShouldUnitAuraIndexBeSecret, unit, index, filter)
         if not ok or secret then return nil end
     end
+    local ok, info = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
+    if not ok then return nil end
     return info
 end
 -- END Grail_SafeGetAuraDataByIndex wrapper
